@@ -3,8 +3,6 @@
 # uninstall all conflicting packages
 sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
 
-# Install the latest version of docker-ce
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 # Add Docker's official GPG key:
 sudo apt update
 sudo apt install ca-certificates curl
@@ -22,3 +20,6 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
 sudo apt update
+
+# Install docker-ce and compose
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
