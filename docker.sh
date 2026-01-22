@@ -53,7 +53,7 @@ for lib in "logger.sh" "sleuth.sh"; do
 done
 
 # Initialize Logging
-init_logging
+init_logging || exit 1
 
 # Detect OS Context (Sets OS_ID, OS_CODENAME, PKG_MANAGER)
 detect_os || exit 1
@@ -228,15 +228,14 @@ enable_services() {
     log "INFO" "Enabling systemd services..."
 
     # Enable and start immediately
-    if systemctl enable --now docker &> /dev/null; then
+    if run_quiet "Enable and start docker service" systemctl enable --now docker; then
         log "SUCCESS" "Service 'docker' enabled and started."
     else
-        log "ERROR" "Failed to enable 'docker' service."
         return 1
     fi
 
     # Containerd is usually managed by docker, but enabling it explicitly is safe practice
-    systemctl enable --now containerd &> /dev/null
+    run_quiet "Enable and start containerd service" systemctl enable --now containerd || true
 }
 
 # Function: verify_installation
