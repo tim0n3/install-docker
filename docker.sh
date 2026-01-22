@@ -94,8 +94,27 @@ run_quiet() {
 cleanup_conflicting_packages() {
     log "INFO" "Scanning for conflicting packages..."
 
-    local DEBS="docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc"
-    local RPMS="docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine podman buildah"
+    local DEBS=(
+        docker.io
+        docker-doc
+        docker-compose
+        docker-compose-v2
+        podman-docker
+        containerd
+        runc
+    )
+    local RPMS=(
+        docker
+        docker-client
+        docker-client-latest
+        docker-common
+        docker-latest
+        docker-latest-logrotate
+        docker-logrotate
+        docker-engine
+        podman
+        buildah
+    )
     case "$PKG_MANAGER" in
         apt)
             # List of packages to remove for Debian/Ubuntu
@@ -104,13 +123,13 @@ cleanup_conflicting_packages() {
             # We use DEBIAN_FRONTEND=noninteractive to prevent blocking.
             log "INFO" "Removing all conflicting packages"
             export DEBIAN_FRONTEND=noninteractive
-            apt-get remove -yqq $DEBS &> /dev/null
+            run_quiet "Remove conflicting packages" apt-get remove -yqq "${DEBS[@]}" || return 1
             log "INFO" "Conflicting packages have been removed, or there were none."
             ;;
         dnf)
             # RHEL/CentOS often ships with Podman. Docker CE conflicts with it.
             log "INFO" "Removing all conflicting packages"
-            run_quiet "Remove conflicting packages" dnf remove -y $RPMS
+            run_quiet "Remove conflicting packages" dnf remove -y "${RPMS[@]}" || return 1
             log "INFO" "Conflicting packages have been removed, or there were none."
             ;;
     esac
@@ -183,15 +202,21 @@ EOF
 install_packages() {
     log "INFO" "Installing Docker Engine and Compose plugin..."
 
-    local PKGS="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+    local PKGS=(
+        docker-ce
+        docker-ce-cli
+        containerd.io
+        docker-buildx-plugin
+        docker-compose-plugin
+    )
 
     case "$PKG_MANAGER" in
         apt)
             export DEBIAN_FRONTEND=noninteractive
-            run_quiet "Install Docker packages" apt-get install -yqq $PKGS || return 1
+            run_quiet "Install Docker packages" apt-get install -yqq "${PKGS[@]}" || return 1
             ;;
         dnf)
-            run_quiet "Install Docker packages" dnf install -y $PKGS || return 1
+            run_quiet "Install Docker packages" dnf install -y "${PKGS[@]}" || return 1
             ;;
     esac
     log "SUCCESS" "Package installation completed."
