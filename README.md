@@ -25,7 +25,6 @@ It runs one script: `docker.sh`.
   - `/etc/apt/keyrings/docker.asc`
   - `/etc/apt/sources.list.d/docker.sources`
   - `/etc/yum.repos.d/docker-ce.repo` (dnf)
-  - `/etc/zypp/repos.d/docker-ce.repo` (zypper)
 - Installs packages
 - Enables services: `docker`, `containerd`
 - Writes a log file to `/var/log` (or the repo folder if `/var/log` is not writable)
@@ -34,7 +33,6 @@ It runs one script: `docker.sh`.
 - Ubuntu and Debian (apt)
 - RHEL family: RHEL, CentOS, Rocky, Alma (dnf)
 - Fedora (dnf)
-- SLES or OpenSUSE (zypper)
 
 ## Docs
 - [Quick start](docs/QUICKSTART.md)

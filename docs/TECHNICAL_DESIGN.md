@@ -54,7 +54,6 @@ Install Docker Engine in a safe and repeatable way across common Linux distros.
   - Ubuntu or Debian -> apt
   - RHEL family -> dnf
   - Fedora -> dnf
-  - SLES or OpenSUSE -> zypper
 
 ## How download source setup works
 ### apt (Ubuntu and Debian)
@@ -68,10 +67,6 @@ Install Docker Engine in a safe and repeatable way across common Linux distros.
 - Adds the Docker repo file from `download.docker.com`.
 - Uses the Fedora repo for Fedora.
 - Uses the CentOS repo for RHEL-family distros.
-
-### zypper (SLES and OpenSUSE)
-- Adds the Docker repo file from `download.docker.com`.
-- Runs `zypper refresh`.
 
 ## Packages we install
 - `docker-ce`

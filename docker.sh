@@ -62,12 +62,40 @@ detect_os || exit 1
 # HELPER FUNCTIONS
 # ==============================================================================
 
+# Function: run_quiet
+# Purpose:  Runs a command quietly and records output in the log file.
+#           On failure, logs a single error line and returns non-zero.
+run_quiet() {
+    local desc="$1"
+    shift
+
+    if [[ -n "$LOG_FILE" ]]; then
+        "$@" >>"$LOG_FILE" 2>&1
+    else
+        "$@" &> /dev/null
+    fi
+
+    local rc=$?
+    if [[ $rc -ne 0 ]]; then
+        local hint=""
+        if [[ -n "$LOG_FILE" ]]; then
+            hint=" See $LOG_FILE for details."
+        fi
+        log "ERROR" "${desc} failed.${hint}"
+        return $rc
+    fi
+
+    return 0
+}
+
 # Function: cleanup_conflicting_packages
 # Purpose:  Removes old versions and conflicting tools (Podman/Buildah on RHEL).
 #           Idempotent: Package managers generally handle "not installed" gracefully.
 cleanup_conflicting_packages() {
     log "INFO" "Scanning for conflicting packages..."
 
+    local DEBS="docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc"
+    local RPMS="docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine podman buildah"
     case "$PKG_MANAGER" in
         apt)
             # List of packages to remove for Debian/Ubuntu
@@ -76,30 +104,13 @@ cleanup_conflicting_packages() {
             # We use DEBIAN_FRONTEND=noninteractive to prevent blocking.
             log "INFO" "Removing all conflicting packages"
             export DEBIAN_FRONTEND=noninteractive
-            apt-get remove -yqq docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc &> /dev/null
+            apt-get remove -yqq $DEBS &> /dev/null
             log "INFO" "Conflicting packages have been removed, or there were none."
             ;;
         dnf)
             # RHEL/CentOS often ships with Podman. Docker CE conflicts with it.
             log "INFO" "Removing all conflicting packages"
-            dnf remove -y docker \
-                          docker-client \
-                          docker-client-latest \
-                          docker-common \
-                          docker-latest \
-                          docker-latest-logrotate \
-                          docker-logrotate \
-                          docker-engine \
-                          podman \
-                          buildah &> /dev/null
-            log "INFO" "Conflicting packages have been removed, or there were none."
-            ;;
-        zypper)
-            log "INFO" "Removing all conflicting packages"
-            zypper remove -y docker \
-                             docker-client \
-                             docker-runc \
-                             containerd &> /dev/null
+            dnf remove -y $RPMS &> /dev/null
             log "INFO" "Conflicting packages have been removed, or there were none."
             ;;
     esac
@@ -110,27 +121,27 @@ cleanup_conflicting_packages() {
 # Purpose:  Configures the upstream Docker CE repository.
 #           Handles GPG keys for Apt and Config Manager for DNF.
 setup_repositories() {
-    log "INFO" "Configuring Docker repositories for detected OS: $OS_ID ($OS_CODENAME)..."
+    log "INFO" "Configuring Docker repositories for $OS_ID ($OS_CODENAME)..."
 
     case "$PKG_MANAGER" in
         apt)
             # 1. Install prerequisites
             # For POSIX Compliance use: -qq > /dev/null 2>&1
             log "INFO" "Installing prerequisites"
-            apt-get update -qq &> /dev/null
-            apt-get install -yqq ca-certificates curl gnupg &> /dev/null
+            run_quiet "Apt update (base)" apt-get update -qq || return 1
+            run_quiet "Install prerequisites" apt-get install -yqq ca-certificates curl gnupg || return 1
 
             # 2. Setup Keyrings
             log "INFO" "Setting up Keyrings"
-            install -m 0755 -d /etc/apt/keyrings &> /dev/null
+            run_quiet "Create keyrings directory" install -m 0755 -d /etc/apt/keyrings || return 1
             # Download key strictly if it changed or doesn't exist
-            curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" -o /etc/apt/keyrings/docker.asc
+            run_quiet "Fetch Docker GPG key" curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" -o /etc/apt/keyrings/docker.asc || return 1
             chmod a+r /etc/apt/keyrings/docker.asc
 
             # 3. Create Source File (Deb822 format preferred now, but sticking to standard list for broad compat)
             # We use the detected OS_ID (ubuntu/debian) and OS_CODENAME (noble/bookworm/etc)
             # We detect architecture dynamically to avoid hardcoding [arch=amd64]
-            log "INFO" "Creating docker sources file (Deb822)"
+            log "INFO" "Creating Docker sources file (Deb822)"
             local arch
             arch="$(dpkg --print-architecture)"
 
@@ -143,14 +154,14 @@ Components: stable
 Architectures: ${arch}
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
-            log "INFO" "Updating local repo db for Docker's install"
-            apt-get update -qq &> /dev/null
+            log "INFO" "Refreshing package index for Docker"
+            run_quiet "Apt update (Docker repo)" apt-get update -qq || return 1
             ;;
 
         dnf)
             # Install core plugins for repo management
             log "INFO" "Installing prerequisites"
-            dnf install -y dnf-plugins-core &> /dev/null
+            run_quiet "Install DNF plugins" dnf install -y dnf-plugins-core || return 1
 
             local repo_url=""
             if [[ "$OS_ID" == "fedora" ]]; then
@@ -160,16 +171,8 @@ EOF
                 repo_url="https://download.docker.com/linux/centos/docker-ce.repo"
             fi
 
-            log "INFO" "Updating local repo db for Docker's install"
-            dnf config-manager --add-repo "$repo_url" &> /dev/null
-            ;;
-
-        zypper)
-            # SLES/OpenSUSE
-            log "INFO" "Installing prerequisites"
-            zypper addrepo "https://download.docker.com/linux/suse/docker-ce.repo" &> /dev/null
-            log "INFO" "Updating local repo db for Docker's install"
-            zypper refresh &> /dev/null
+            log "INFO" "Adding Docker repo"
+            run_quiet "Add Docker repo" dnf config-manager --add-repo "$repo_url" || return 1
             ;;
     esac
     log "SUCCESS" "Repository configuration completed."
@@ -180,16 +183,15 @@ EOF
 install_packages() {
     log "INFO" "Installing Docker Engine and Compose plugin..."
 
+    local PKGS="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+
     case "$PKG_MANAGER" in
         apt)
             export DEBIAN_FRONTEND=noninteractive
-            apt-get install -yqq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &> /dev/null
+            run_quiet "Install Docker packages" apt-get install -yqq $PKGS || return 1
             ;;
         dnf)
-            dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &> /dev/null
-            ;;
-        zypper)
-            zypper install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin &> /dev/null
+            run_quiet "Install Docker packages" dnf install -y $PKGS || return 1
             ;;
     esac
     log "SUCCESS" "Package installation completed."
@@ -246,12 +248,12 @@ verify_installation() {
 # ==============================================================================
 
 # Execute Main
-log "INFO" "Starting Docker Installation Controller v2.0.0"
+log "INFO" "Starting Docker install controller v2.0.0"
 
 # 1. Clean old mess
 cleanup_conflicting_packages
 
-# 2. Setup Upstream Repos
+# 2. Set up upstream repos
 setup_repositories
 
 # 3. Install
@@ -267,4 +269,3 @@ verify_installation || {
 }
 
 log "SUCCESS" "Docker installation completed successfully!"
-
