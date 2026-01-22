@@ -276,16 +276,16 @@ verify_installation() {
 log "INFO" "Starting Docker install controller v2.0.0"
 
 # 1. Clean old mess
-cleanup_conflicting_packages
+cleanup_conflicting_packages || exit 1
 
 # 2. Set up upstream repos
-setup_repositories
+setup_repositories || exit 1
 
 # 3. Install
-install_packages
+install_packages || exit 1
 
 # 4. Service Start
-enable_services
+enable_services || exit 1
 
 # 5. Verify
 verify_installation || {
