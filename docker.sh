@@ -110,7 +110,7 @@ cleanup_conflicting_packages() {
         dnf)
             # RHEL/CentOS often ships with Podman. Docker CE conflicts with it.
             log "INFO" "Removing all conflicting packages"
-            dnf remove -y $RPMS &> /dev/null
+            run_quiet "Remove conflicting packages" dnf remove -y $RPMS
             log "INFO" "Conflicting packages have been removed, or there were none."
             ;;
     esac
