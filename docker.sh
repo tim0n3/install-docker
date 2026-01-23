@@ -129,8 +129,19 @@ cleanup_conflicting_packages() {
         dnf)
             # RHEL/CentOS often ships with Podman. Docker CE conflicts with it.
             log "INFO" "Removing all conflicting packages"
-            run_quiet "Remove conflicting packages" dnf remove -y "${RPMS[@]}" || return 1
-            log "INFO" "Conflicting packages have been removed, or there were none."
+            local installed=()
+            local pkg
+            for pkg in "${RPMS[@]}"; do
+                if rpm -q "$pkg" >/dev/null 2>&1; then
+                    installed+=("$pkg")
+                fi
+            done
+            if (( ${#installed[@]} > 0 )); then
+                run_quiet "Remove conflicting packages" dnf remove -y "${installed[@]}" || return 1
+                log "INFO" "Conflicting packages have been removed, or there were none."
+            else
+                log "INFO" "No conflicting packages found."
+            fi
             ;;
     esac
     log "SUCCESS" "Cleanup phase completed."
@@ -190,8 +201,13 @@ EOF
                 repo_url="https://download.docker.com/linux/centos/docker-ce.repo"
             fi
 
-            log "INFO" "Adding Docker repo"
-            run_quiet "Add Docker repo" dnf config-manager --add-repo "$repo_url" || return 1
+            local repo_file="/etc/yum.repos.d/docker-ce.repo"
+            if [[ -f "$repo_file" ]]; then
+                log "INFO" "Docker repo already present. Skipping add."
+            else
+                log "INFO" "Adding Docker repo"
+                run_quiet "Add Docker repo" dnf config-manager --add-repo "$repo_url" || return 1
+            fi
             ;;
     esac
     log "SUCCESS" "Repository configuration completed."
