@@ -8,7 +8,7 @@
 #
 # Description:
 #   - Identifies OS ID, Version, and Codename.
-#   - Maps distributions to package managers (apt/dnf/zypper).
+#   - Maps distributions to package managers (apt/dnf).
 #   - DEPENDENCY: Requires lib/logger.sh to be sourced first.
 #
 # Usage:
@@ -23,10 +23,10 @@
 # Purpose:  Identifies OS distribution and version using /etc/os-release.
 #           Sets global variables for downstream logic.
 # Global Vars Set:
-#           OS_ID (ubuntu, debian, rhel, centos, fedora, sles)
+#           OS_ID (ubuntu, debian, rhel, centos, fedora)
 #           OS_VERSION_ID (e.g., 22.04, 9, 15.5)
 #           OS_CODENAME (e.g., jammy, bookworm)
-#           PKG_MANAGER (apt, dnf, zypper)
+#           PKG_MANAGER (apt, dnf)
 # Args:     None
 # Returns:  0 on success, 1 on failure
 # ==============================================================================
@@ -70,21 +70,14 @@ detect_os() {
             fi
             ;;
 
-        centos|rhel|fedora|almalinux|rocky)
+        fedora)
             PKG_MANAGER="dnf"
-            # RHEL-based systems map ID to 'rhel' family logic usually
-            if [[ "$OS_ID" == "fedora" ]]; then
-                # Fedora is distinct upstream
-                :
-            else
-                # Normalize CentOS/Alma/Rocky to RHEL-compatible handling
-                OS_ID="rhel"
-            fi
             ;;
 
-        sles|opensuse*|suse)
-            PKG_MANAGER="zypper"
-            OS_ID="sles"
+        centos|rhel|almalinux|rocky)
+            PKG_MANAGER="dnf"
+            # Normalize CentOS/Alma/Rocky to RHEL-compatible handling
+            OS_ID="rhel"
             ;;
 
         *)
